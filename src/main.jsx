@@ -83,12 +83,13 @@ function localAnswer(question, tours, weather) {
   }
   let selected = views
   if (text.includes('cheap')) selected = [...views].sort((a, b) => (Number(a.price.replace(/[^0-9.]/g, '')) || Number.POSITIVE_INFINITY) - (Number(b.price.replace(/[^0-9.]/g, '')) || Number.POSITIVE_INFINITY)).slice(0, 1)
+  if (text.includes('expensive') || text.includes('costliest') || text.includes('highest price')) selected = [...views].filter(tour => Number(tour.price.replace(/[^0-9.]/g, '')) > 0).sort((a, b) => Number(b.price.replace(/[^0-9.]/g, '')) - Number(a.price.replace(/[^0-9.]/g, ''))).slice(0, 1)
   if (text.includes('offer')) selected = views.filter(tour => tour.offer)
   if (text.includes('available') || text.includes('week') || text.includes('recommend')) selected = views.filter(tour => !/^0$|full|sold|none|unavailable/i.test(tour.availability))
   if (text.includes('no available') || text.includes('fully booked')) selected = views.filter(tour => /^0$|full|sold|none|unavailable/i.test(tour.availability))
   if (text.includes('offer') && !selected.length) return 'I checked the live tour sheet and found no special offers listed right now.'
   if (!selected.length) return `I checked the live Google Sheet, but I couldn’t find a matching tour. Ask “What tours do you offer?” to see the current live catalogue.`
-  const intro = text.includes('cheap') ? 'The cheapest live option appears to be:' : text.includes('offer') ? 'These live rows include an offer:' : text.includes('no available') ? 'These tours are marked as having no availability in the live sheet:' : `I found ${selected.length} live tour${selected.length === 1 ? '' : 's'} matching that:`
+  const intro = text.includes('cheap') ? 'The cheapest live option appears to be:' : text.includes('expensive') || text.includes('costliest') || text.includes('highest price') ? 'The most expensive live option appears to be:' : text.includes('offer') ? 'These live rows include an offer:' : text.includes('no available') ? 'These tours are marked as having no availability in the live sheet:' : `I found ${selected.length} live tour${selected.length === 1 ? '' : 's'} matching that:`
   const weatherNote = text.includes('recommend') && weather ? (weather.current.weather_code <= 3 && weather.current.wind_speed_10m < 35 ? ' The current forecast is broadly favourable for outdoor touring.' : ' The current forecast is mixed, so bring waterproofs and confirm conditions with the team.') : ''
   return `${intro}${weatherNote}\n\n${selected.slice(0, 6).map(tour => `• ${tour.name || 'Unnamed tour'}${tour.location ? ` · ${tour.location}` : ''}${tour.price ? ` · ${tour.price}` : ''}${tour.availability ? ` · Places this week: ${tour.availability}` : ''}${tour.offer ? ` · Offer: ${tour.offer}` : ''}${priceWarning(tour.price)}`).join('\n')}`
 }
@@ -111,6 +112,10 @@ function isOutOfScope(question) {
   return /\b(pizza|food order|restaurant|recipe|cooking|movie|music|football|banking|medical advice)\b/i.test(question)
 }
 
+function isExactLookup(question) {
+  return /\b(cheapest|most expensive|costliest|highest price|no available|fully booked|special offer)\b/i.test(question)
+}
+
 function App() {
   const [messages, setMessages] = useState([{ from: 'bot', text: 'Hello, I’m your Atlantic Coast Tours assistant. I can check our live tours, availability, prices and west-coast weather. What would you like to explore?' }])
   const [input, setInput] = useState('')
@@ -128,7 +133,7 @@ function App() {
       const needsWeather = /weather|forecast|suitable|rain|coastal tour/i.test(trimmed)
       const weather = needsWeather ? await fetchWeather(weatherLocation(trimmed)) : null
       // Keep unrelated requests away from the tour context and the LLM.
-      const modelAnswer = isOutOfScope(trimmed) ? null : await askModel(trimmed, tours, weather)
+      const modelAnswer = isOutOfScope(trimmed) || isExactLookup(trimmed) ? null : await askModel(trimmed, tours, weather)
       setMessages(current => [...current, { from: 'bot', text: modelAnswer || localAnswer(trimmed, tours, weather), live: true }])
       setStatus(`Live data checked just now · ${tours.length} rows found`)
     } catch (error) {
