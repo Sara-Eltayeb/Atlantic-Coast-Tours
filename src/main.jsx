@@ -66,14 +66,16 @@ function weatherLocation(question) {
 
 function priceWarning(price) {
   const number = Number(String(price).replace(/[^0-9.]/g, ''))
-  return number > 0 && number < 5 ? ' This live price looks unusually low, so please confirm it with a human team member before booking.' : ''
+  return number > 0 && (number < 5 || number > 1000) ? ' This live price looks unusual, so please confirm it with a human team member before booking.' : ''
 }
 
 function localAnswer(question, tours, weather) {
   const text = question.toLowerCase()
   const views = tours.map(tourView).filter(tour => tour.name || tour.description)
   const questionTerms = text.split(/[^a-z0-9]+/).filter(term => term.length > 3)
-  const specificTours = views.filter(tour => questionTerms.some(term => `${tour.name} ${tour.location} ${tour.description}`.toLowerCase().includes(term)))
+  const normalizedQuestion = text.replace(/[^a-z0-9]+/g, ' ').trim()
+  const exactTours = views.filter(tour => tour.name && normalizedQuestion.includes(tour.name.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()))
+  const specificTours = exactTours.length ? exactTours : views.filter(tour => questionTerms.some(term => `${tour.name} ${tour.location} ${tour.description}`.toLowerCase().includes(term)))
   if (text.includes('pizza') || text.includes('food') || text.includes('restaurant') || text.includes('order')) return 'I’m Atlantic Coast Tours’ travel assistant, so I can help with tours, weather and trip planning, but I can’t place food orders.'
   if (text.includes('flight')) return 'I can help you plan a trip, but I can’t search or book flights from this chat. A human member of the Atlantic Coast Tours team can help with that.'
   if (text.includes('interesting') || text.includes('ireland')) return 'Ireland’s Atlantic coast is shaped by the Gulf Stream, which helps keep the west coast remarkably mild for its latitude. For a local experience, ask me about the live tours in the sheet.'
@@ -92,8 +94,9 @@ function localAnswer(question, tours, weather) {
   if (text.includes('no available') || text.includes('fully booked')) selected = views.filter(tour => /^0$|full|sold|none|unavailable/i.test(tour.availability))
   if (text.includes('offer') && !selected.length) return 'No special offers are listed at the moment.'
   if (!selected.length) return 'No matching tour was found in the live catalogue.'
+  if ((text.includes('price') || text.includes('cost') || text.includes('how much')) && exactTours.length === 1) return `The live price for ${exactTours[0].name} is ${exactTours[0].price || 'not listed'}.${priceWarning(exactTours[0].price)}`
   if (selected.length > 1 && !text.includes('cheap') && !text.includes('expensive') && !text.includes('costliest')) selected = [...selected].sort((a, b) => a.name.localeCompare(b.name))
-  const intro = text.includes('cheap') ? 'The cheapest live option appears to be:' : text.includes('expensive') || text.includes('costliest') || text.includes('highest price') ? 'The most expensive live option appears to be:' : text.includes('offer') ? 'These live rows include an offer:' : text.includes('no available') ? 'These tours are marked as having no availability in the live sheet:' : `I found ${selected.length} live tour${selected.length === 1 ? '' : 's'} matching that:`
+  const intro = text.includes('cheap') ? 'The cheapest live option is:' : text.includes('expensive') || text.includes('costliest') || text.includes('highest price') ? 'The most expensive live option is:' : text.includes('price') || text.includes('cost') || text.includes('how much') ? 'The live price is:' : text.includes('offer') ? 'These live rows include an offer:' : text.includes('no available') ? 'These tours are marked as having no availability in the live sheet:' : `I found ${selected.length} live tour${selected.length === 1 ? '' : 's'} matching that:`
   const weatherNote = text.includes('recommend') && weather ? (weather.current.weather_code <= 3 && weather.current.wind_speed_10m < 35 ? ' The current forecast is broadly favourable for outdoor touring.' : ' The current forecast is mixed, so bring waterproofs and confirm conditions with the team.') : ''
   return `${intro}${weatherNote}\n\n${selected.slice(0, 6).map(tour => `• ${tour.name || 'Unnamed tour'}${tour.location ? ` · ${tour.location}` : ''}${tour.price ? ` · ${tour.price}` : ''}${tour.availability ? ` · Places this week: ${tour.availability}` : ''}${tour.offer ? ` · Offer: ${tour.offer}` : ''}${priceWarning(tour.price)}`).join('\n')}`
 }
