@@ -72,7 +72,7 @@ function priceWarning(price) {
 function localAnswer(question, tours, weather) {
   const text = question.toLowerCase()
   const views = tours.map(tourView).filter(tour => tour.name || tour.description)
-  if (text.includes('food') || text.includes('restaurant') || text.includes('order')) return 'I’m Atlantic Coast Tours’ travel assistant, so I can help with tours, weather and trip planning, but I can’t place food orders.'
+  if (text.includes('pizza') || text.includes('food') || text.includes('restaurant') || text.includes('order')) return 'I’m Atlantic Coast Tours’ travel assistant, so I can help with tours, weather and trip planning, but I can’t place food orders.'
   if (text.includes('flight')) return 'I can help you plan a trip, but I can’t search or book flights from this chat. A human member of the Atlantic Coast Tours team can help with that.'
   if (text.includes('interesting') || text.includes('ireland')) return 'Ireland’s Atlantic coast is shaped by the Gulf Stream, which helps keep the west coast remarkably mild for its latitude. For a local experience, ask me about the live tours in the sheet.'
   if (text.includes('weather') || text.includes('forecast') || text.includes('suitable') || text.includes('rain')) {
@@ -107,6 +107,10 @@ async function askModel(question, tours, weather) {
   return null
 }
 
+function isOutOfScope(question) {
+  return /\b(pizza|food order|restaurant|recipe|cooking|movie|music|football|banking|medical advice)\b/i.test(question)
+}
+
 function App() {
   const [messages, setMessages] = useState([{ from: 'bot', text: 'Hello, I’m your Atlantic Coast Tours assistant. I can check our live tours, availability, prices and west-coast weather. What would you like to explore?' }])
   const [input, setInput] = useState('')
@@ -123,7 +127,8 @@ function App() {
       const tours = await fetchTours()
       const needsWeather = /weather|forecast|suitable|rain|coastal tour/i.test(trimmed)
       const weather = needsWeather ? await fetchWeather(weatherLocation(trimmed)) : null
-      const modelAnswer = await askModel(trimmed, tours, weather)
+      // Keep unrelated requests away from the tour context and the LLM.
+      const modelAnswer = isOutOfScope(trimmed) ? null : await askModel(trimmed, tours, weather)
       setMessages(current => [...current, { from: 'bot', text: modelAnswer || localAnswer(trimmed, tours, weather), live: true }])
       setStatus(`Live data checked just now · ${tours.length} rows found`)
     } catch (error) {
