@@ -72,6 +72,8 @@ function priceWarning(price) {
 function localAnswer(question, tours, weather) {
   const text = question.toLowerCase()
   const views = tours.map(tourView).filter(tour => tour.name || tour.description)
+  const questionTerms = text.split(/[^a-z0-9]+/).filter(term => term.length > 3)
+  const specificTours = views.filter(tour => questionTerms.some(term => `${tour.name} ${tour.location} ${tour.description}`.toLowerCase().includes(term)))
   if (text.includes('pizza') || text.includes('food') || text.includes('restaurant') || text.includes('order')) return 'I’m Atlantic Coast Tours’ travel assistant, so I can help with tours, weather and trip planning, but I can’t place food orders.'
   if (text.includes('flight')) return 'I can help you plan a trip, but I can’t search or book flights from this chat. A human member of the Atlantic Coast Tours team can help with that.'
   if (text.includes('interesting') || text.includes('ireland')) return 'Ireland’s Atlantic coast is shaped by the Gulf Stream, which helps keep the west coast remarkably mild for its latitude. For a local experience, ask me about the live tours in the sheet.'
@@ -82,6 +84,7 @@ function localAnswer(question, tours, weather) {
     return `${place.name}, ${place.country} currently has ${Math.round(current.temperature_2m)}°C, ${weatherText(current.weather_code)} and wind around ${Math.round(current.wind_speed_10m)} km/h. Today’s forecast rain probability reaches ${rainChance}%. ${suitable ? 'That looks broadly suitable for a coastal tour, with a warm layer and waterproofs.' : 'Conditions look mixed for a coastal tour, so check with the team before setting out.'}`
   }
   let selected = views
+  if (specificTours.length && !/what tours|which tours|tours do you offer|available this week|recommend/i.test(text)) selected = specificTours
   if (text.includes('cheap')) selected = [...views].sort((a, b) => (Number(a.price.replace(/[^0-9.]/g, '')) || Number.POSITIVE_INFINITY) - (Number(b.price.replace(/[^0-9.]/g, '')) || Number.POSITIVE_INFINITY)).slice(0, 1)
   if (text.includes('expensive') || text.includes('costliest') || text.includes('highest price')) selected = [...views].filter(tour => Number(tour.price.replace(/[^0-9.]/g, '')) > 0).sort((a, b) => Number(b.price.replace(/[^0-9.]/g, '')) - Number(a.price.replace(/[^0-9.]/g, ''))).slice(0, 1)
   if (text.includes('offer')) selected = views.filter(tour => tour.offer)
@@ -96,13 +99,13 @@ function localAnswer(question, tours, weather) {
 
 async function askModel(question, tours, weather) {
   const context = JSON.stringify({ tours: tours.map(tourView), weather })
-  const instructions = `You are Atlantic Coast Tours' customer assistant. Answer naturally and concisely using only the live context below. Never invent, normalize, or correct prices, dates, availability or offers. If a price looks unrealistic, quote it exactly and warn the customer to confirm with a human. Say clearly when information is absent. You cannot take payments, book flights, or order food.\nLIVE CONTEXT:\n${context}\nCUSTOMER: ${question}`
+  const instructions = `You are Atlantic Coast Tours' customer assistant. Answer only the customer's exact question in 1-3 short sentences. Do not add unrelated tour lists, suggestions, background, follow-up questions, or information the customer did not request. Use only the live context below. Never invent, normalize, or correct prices, dates, availability or offers. If a price looks unrealistic, quote it exactly and warn the customer to confirm with a human. Say clearly when information is absent. You cannot take payments, book flights, or order food.\nLIVE CONTEXT:\n${context}\nCUSTOMER: ${question}`
   try {
     const response = await fetch('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question, context, instructions }) })
     if (response.ok) { const data = await response.json(); if (data.text) return data.text }
   } catch { /* GitHub Pages has no server route; the grounded answer remains available. */ }
   if (import.meta.env.VITE_GEMINI_API_KEY) {
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(import.meta.env.VITE_GEMINI_API_KEY)}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: instructions }] }] }) })
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(import.meta.env.VITE_GEMINI_API_KEY)}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: instructions }] }], generationConfig: { temperature: 0.2, maxOutputTokens: 220 } }) })
     if (response.ok) return (await response.json()).candidates?.[0]?.content?.parts?.[0]?.text || null
   }
   return null
@@ -113,7 +116,7 @@ function isOutOfScope(question) {
 }
 
 function isExactLookup(question) {
-  return /\b(cheapest|most expensive|costliest|highest price|no available|fully booked|special offer)\b/i.test(question)
+  return /\b(cheapest|most expensive|costliest|highest price|no available|fully booked|special offer|price|cost|how much)\b/i.test(question)
 }
 
 function App() {
