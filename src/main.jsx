@@ -85,7 +85,8 @@ function localAnswer(question, tours, weather) {
     if (!weather) return 'The live weather service did not respond, so I can’t assess conditions safely right now.'
     const { place, current, rainChance } = weather
     const suitable = current.weather_code <= 3 && current.wind_speed_10m < 35 && rainChance < 70
-    return `${place.name}, ${place.country} currently has ${Math.round(current.temperature_2m)}°C, ${weatherText(current.weather_code)} and wind around ${Math.round(current.wind_speed_10m)} km/h. Today’s forecast rain probability reaches ${rainChance}%. ${suitable ? 'That looks broadly suitable for a coastal tour, with a warm layer and waterproofs.' : 'Conditions look mixed for a coastal tour, so check with the team before setting out.'}`
+    const summary = `${place.name} is ${Math.round(current.temperature_2m)}°C right now, with ${weatherText(current.weather_code)} and a wind speed of around ${Math.round(current.wind_speed_10m)} km/h. There’s a ${rainChance}% chance of rain today.`
+    return /suitable|coastal|good for|should i|should we/i.test(text) ? `${summary} ${suitable ? 'It looks suitable for a coastal tour, with a warm layer and waterproofs.' : 'It’s a mixed day for a coastal tour, so bring waterproofs and check conditions before setting out.'}` : summary
   }
   let selected = views
   if (specificTours.length && !/what tours|which tours|tours do you offer|available this week|recommend/i.test(text)) selected = specificTours
