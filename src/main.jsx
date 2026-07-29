@@ -59,8 +59,24 @@ async function fetchWeather(location = 'Galway') {
   return { place, current: data.current, rainChance: Math.max(...(data.hourly?.precipitation_probability || [0])) }
 }
 
-function weatherLocation(question) {
-  const match = question.match(/(?:weather|forecast|conditions)(?:\s+(?:in|for|at))?\s+([a-z][a-z -]{2,30})/i)
+function weatherLocation(question, tours = []) {
+  const normalizedQuestion = question.toLowerCase().replace(/[^a-z0-9]+/g, ' ')
+
+  const matchingTour = tours
+    .map(tourView)
+    .find(tour =>
+      tour.name &&
+      normalizedQuestion.includes(
+        tour.name.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+      )
+    )
+
+  if (matchingTour?.location) return matchingTour.location
+
+  const match = question.match(
+    /(?:weather|forecast|conditions)(?:\s+(?:in|for|at))?\s+([a-z][a-z -]{2,30})/i
+  )
+
   return match?.[1]?.replace(/[?.!,].*$/, '').trim() || 'Galway'
 }
 
@@ -141,7 +157,7 @@ function App() {
     try {
       const tours = await fetchTours()
       const needsWeather = /weather|forecast|suitable|rain|coastal tour/i.test(trimmed)
-      const weather = needsWeather ? await fetchWeather(weatherLocation(trimmed)) : null
+      const weather = needsWeather ? await fetchWeather(weatherLocation(trimmed, tours)) : null
       // Keep unrelated requests away from the tour context and the LLM.
       const modelAnswer = isOutOfScope(trimmed) || isExactLookup(trimmed) ? null : await askModel(trimmed, tours, weather)
       setMessages(current => [...current, { from: 'bot', text: modelAnswer || localAnswer(trimmed, tours, weather), live: true }])
